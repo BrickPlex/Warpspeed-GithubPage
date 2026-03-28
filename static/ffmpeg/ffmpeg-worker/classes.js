@@ -1,1 +1,306 @@
-import{FFMessageType}from"./const.js";import{getMessageID}from"./utils.js";import{ERROR_TERMINATED,ERROR_NOT_LOADED}from"./errors.js";export class FFmpeg{#e=null;#s={};#t={};#a=[];#r=[];loaded=!1;#i=()=>{this.#e&&(this.#e.onmessage=({data:{id:e,type:s,data:t}})=>{switch(s){case FFMessageType.LOAD:this.loaded=!0,this.#s[e](t);break;case FFMessageType.MOUNT:case FFMessageType.UNMOUNT:case FFMessageType.EXEC:case FFMessageType.FFPROBE:case FFMessageType.WRITE_FILE:case FFMessageType.READ_FILE:case FFMessageType.DELETE_FILE:case FFMessageType.RENAME:case FFMessageType.CREATE_DIR:case FFMessageType.LIST_DIR:case FFMessageType.DELETE_DIR:this.#s[e](t);break;case FFMessageType.LOG:this.#a.forEach(e=>e(t));break;case FFMessageType.PROGRESS:this.#r.forEach(e=>e(t));break;case FFMessageType.ERROR:this.#t[e](t)}delete this.#s[e],delete this.#t[e]})};#o=({type:e,data:s},t=[],a)=>this.#e?new Promise((r,i)=>{const o=getMessageID();this.#e&&this.#e.postMessage({id:o,type:e,data:s},t),this.#s[o]=r,this.#t[o]=i,a?.addEventListener("abort",()=>{i(new DOMException(`Message # ${o} was aborted`,"AbortError"))},{once:!0})}):Promise.reject(ERROR_NOT_LOADED);on(e,s){"log"===e?this.#a.push(s):"progress"===e&&this.#r.push(s)}off(e,s){"log"===e?this.#a=this.#a.filter(e=>e!==s):"progress"===e&&(this.#r=this.#r.filter(e=>e!==s))}load=({classWorkerURL:e,...s}={},{signal:t}={})=>(this.#e||(this.#e=e?new Worker(new URL(e,import.meta.url),{type:"module"}):new Worker(new URL("./worker.js",import.meta.url),{type:"module"}),this.#i()),this.#o({type:FFMessageType.LOAD,data:s},void 0,t));exec=(e,s=-1,{signal:t}={})=>this.#o({type:FFMessageType.EXEC,data:{args:e,timeout:s}},void 0,t);ffprobe=(e,s=-1,{signal:t}={})=>this.#o({type:FFMessageType.FFPROBE,data:{args:e,timeout:s}},void 0,t);terminate=()=>{const e=Object.keys(this.#t);for(const s of e)this.#t[s](ERROR_TERMINATED),delete this.#t[s],delete this.#s[s];this.#e&&(this.#e.terminate(),this.#e=null,this.loaded=!1)};writeFile=(e,s,{signal:t}={})=>{const a=[];return s instanceof Uint8Array&&a.push(s.buffer),this.#o({type:FFMessageType.WRITE_FILE,data:{path:e,data:s}},a,t)};mount=(e,s,t)=>this.#o({type:FFMessageType.MOUNT,data:{fsType:e,options:s,mountPoint:t}},[]);unmount=e=>this.#o({type:FFMessageType.UNMOUNT,data:{mountPoint:e}},[]);readFile=(e,s="binary",{signal:t}={})=>this.#o({type:FFMessageType.READ_FILE,data:{path:e,encoding:s}},void 0,t);deleteFile=(e,{signal:s}={})=>this.#o({type:FFMessageType.DELETE_FILE,data:{path:e}},void 0,s);rename=(e,s,{signal:t}={})=>this.#o({type:FFMessageType.RENAME,data:{oldPath:e,newPath:s}},void 0,t);createDir=(e,{signal:s}={})=>this.#o({type:FFMessageType.CREATE_DIR,data:{path:e}},void 0,s);listDir=(e,{signal:s}={})=>this.#o({type:FFMessageType.LIST_DIR,data:{path:e}},void 0,s);deleteDir=(e,{signal:s}={})=>this.#o({type:FFMessageType.DELETE_DIR,data:{path:e}},void 0,s)}
+import { FFMessageType } from "./const.js";
+import { getMessageID } from "./utils.js";
+import { ERROR_TERMINATED, ERROR_NOT_LOADED } from "./errors.js";
+/**
+ * Provides APIs to interact with ffmpeg web worker.
+ *
+ * @example
+ * ```ts
+ * const ffmpeg = new FFmpeg();
+ * ```
+ */
+export class FFmpeg {
+    #worker = null;
+    /**
+     * #resolves and #rejects tracks Promise resolves and rejects to
+     * be called when we receive message from web worker.
+     */
+    #resolves = {};
+    #rejects = {};
+    #logEventCallbacks = [];
+    #progressEventCallbacks = [];
+    loaded = false;
+    /**
+     * register worker message event handlers.
+     */
+    #registerHandlers = () => {
+        if (this.#worker) {
+            this.#worker.onmessage = ({ data: { id, type, data }, }) => {
+                switch (type) {
+                    case FFMessageType.LOAD:
+                        this.loaded = true;
+                        this.#resolves[id](data);
+                        break;
+                    case FFMessageType.MOUNT:
+                    case FFMessageType.UNMOUNT:
+                    case FFMessageType.EXEC:
+                    case FFMessageType.FFPROBE:
+                    case FFMessageType.WRITE_FILE:
+                    case FFMessageType.READ_FILE:
+                    case FFMessageType.DELETE_FILE:
+                    case FFMessageType.RENAME:
+                    case FFMessageType.CREATE_DIR:
+                    case FFMessageType.LIST_DIR:
+                    case FFMessageType.DELETE_DIR:
+                        this.#resolves[id](data);
+                        break;
+                    case FFMessageType.LOG:
+                        this.#logEventCallbacks.forEach((f) => f(data));
+                        break;
+                    case FFMessageType.PROGRESS:
+                        this.#progressEventCallbacks.forEach((f) => f(data));
+                        break;
+                    case FFMessageType.ERROR:
+                        this.#rejects[id](data);
+                        break;
+                }
+                delete this.#resolves[id];
+                delete this.#rejects[id];
+            };
+        }
+    };
+    /**
+     * Generic function to send messages to web worker.
+     */
+    #send = ({ type, data }, trans = [], signal) => {
+        if (!this.#worker) {
+            return Promise.reject(ERROR_NOT_LOADED);
+        }
+        return new Promise((resolve, reject) => {
+            const id = getMessageID();
+            this.#worker && this.#worker.postMessage({ id, type, data }, trans);
+            this.#resolves[id] = resolve;
+            this.#rejects[id] = reject;
+            signal?.addEventListener("abort", () => {
+                reject(new DOMException(`Message # ${id} was aborted`, "AbortError"));
+            }, { once: true });
+        });
+    };
+    on(event, callback) {
+        if (event === "log") {
+            this.#logEventCallbacks.push(callback);
+        }
+        else if (event === "progress") {
+            this.#progressEventCallbacks.push(callback);
+        }
+    }
+    off(event, callback) {
+        if (event === "log") {
+            this.#logEventCallbacks = this.#logEventCallbacks.filter((f) => f !== callback);
+        }
+        else if (event === "progress") {
+            this.#progressEventCallbacks = this.#progressEventCallbacks.filter((f) => f !== callback);
+        }
+    }
+    /**
+     * Loads ffmpeg-core inside web worker. It is required to call this method first
+     * as it initializes WebAssembly and other essential variables.
+     *
+     * @category FFmpeg
+     * @returns `true` if ffmpeg core is loaded for the first time.
+     */
+    load = ({ classWorkerURL, ...config } = {}, { signal } = {}) => {
+        if (!this.#worker) {
+            this.#worker = classWorkerURL ?
+                new Worker(new URL(classWorkerURL, import.meta.url), {
+                    type: "module",
+                }) :
+                // We need to duplicated the code here to enable webpack
+                // to bundle worekr.js here.
+                new Worker(new URL("./worker.js", import.meta.url), {
+                    type: "module",
+                });
+            this.#registerHandlers();
+        }
+        return this.#send({
+            type: FFMessageType.LOAD,
+            data: config,
+        }, undefined, signal);
+    };
+    /**
+     * Execute ffmpeg command.
+     *
+     * @remarks
+     * To avoid common I/O issues, ["-nostdin", "-y"] are prepended to the args
+     * by default.
+     *
+     * @example
+     * ```ts
+     * const ffmpeg = new FFmpeg();
+     * await ffmpeg.load();
+     * await ffmpeg.writeFile("video.avi", ...);
+     * // ffmpeg -i video.avi video.mp4
+     * await ffmpeg.exec(["-i", "video.avi", "video.mp4"]);
+     * const data = ffmpeg.readFile("video.mp4");
+     * ```
+     *
+     * @returns `0` if no error, `!= 0` if timeout (1) or error.
+     * @category FFmpeg
+     */
+    exec = (
+    /** ffmpeg command line args */
+    args, 
+    /**
+     * milliseconds to wait before stopping the command execution.
+     *
+     * @defaultValue -1
+     */
+    timeout = -1, { signal } = {}) => this.#send({
+        type: FFMessageType.EXEC,
+        data: { args, timeout },
+    }, undefined, signal);
+    /**
+     * Execute ffprobe command.
+     *
+     * @example
+     * ```ts
+     * const ffmpeg = new FFmpeg();
+     * await ffmpeg.load();
+     * await ffmpeg.writeFile("video.avi", ...);
+     * // Getting duration of a video in seconds: ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 video.avi -o output.txt
+     * await ffmpeg.ffprobe(["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "video.avi", "-o", "output.txt"]);
+     * const data = ffmpeg.readFile("output.txt");
+     * ```
+     *
+     * @returns `0` if no error, `!= 0` if timeout (1) or error.
+     * @category FFmpeg
+     */
+    ffprobe = (
+    /** ffprobe command line args */
+    args, 
+    /**
+     * milliseconds to wait before stopping the command execution.
+     *
+     * @defaultValue -1
+     */
+    timeout = -1, { signal } = {}) => this.#send({
+        type: FFMessageType.FFPROBE,
+        data: { args, timeout },
+    }, undefined, signal);
+    /**
+     * Terminate all ongoing API calls and terminate web worker.
+     * `FFmpeg.load()` must be called again before calling any other APIs.
+     *
+     * @category FFmpeg
+     */
+    terminate = () => {
+        const ids = Object.keys(this.#rejects);
+        // rejects all incomplete Promises.
+        for (const id of ids) {
+            this.#rejects[id](ERROR_TERMINATED);
+            delete this.#rejects[id];
+            delete this.#resolves[id];
+        }
+        if (this.#worker) {
+            this.#worker.terminate();
+            this.#worker = null;
+            this.loaded = false;
+        }
+    };
+    /**
+     * Write data to ffmpeg.wasm.
+     *
+     * @example
+     * ```ts
+     * const ffmpeg = new FFmpeg();
+     * await ffmpeg.load();
+     * await ffmpeg.writeFile("video.avi", await fetchFile("../video.avi"));
+     * await ffmpeg.writeFile("text.txt", "hello world");
+     * ```
+     *
+     * @category File System
+     */
+    writeFile = (path, data, { signal } = {}) => {
+        const trans = [];
+        if (data instanceof Uint8Array) {
+            trans.push(data.buffer);
+        }
+        return this.#send({
+            type: FFMessageType.WRITE_FILE,
+            data: { path, data },
+        }, trans, signal);
+    };
+    mount = (fsType, options, mountPoint) => {
+        const trans = [];
+        return this.#send({
+            type: FFMessageType.MOUNT,
+            data: { fsType, options, mountPoint },
+        }, trans);
+    };
+    unmount = (mountPoint) => {
+        const trans = [];
+        return this.#send({
+            type: FFMessageType.UNMOUNT,
+            data: { mountPoint },
+        }, trans);
+    };
+    /**
+     * Read data from ffmpeg.wasm.
+     *
+     * @example
+     * ```ts
+     * const ffmpeg = new FFmpeg();
+     * await ffmpeg.load();
+     * const data = await ffmpeg.readFile("video.mp4");
+     * ```
+     *
+     * @category File System
+     */
+    readFile = (path, 
+    /**
+     * File content encoding, supports two encodings:
+     * - utf8: read file as text file, return data in string type.
+     * - binary: read file as binary file, return data in Uint8Array type.
+     *
+     * @defaultValue binary
+     */
+    encoding = "binary", { signal } = {}) => this.#send({
+        type: FFMessageType.READ_FILE,
+        data: { path, encoding },
+    }, undefined, signal);
+    /**
+     * Delete a file.
+     *
+     * @category File System
+     */
+    deleteFile = (path, { signal } = {}) => this.#send({
+        type: FFMessageType.DELETE_FILE,
+        data: { path },
+    }, undefined, signal);
+    /**
+     * Rename a file or directory.
+     *
+     * @category File System
+     */
+    rename = (oldPath, newPath, { signal } = {}) => this.#send({
+        type: FFMessageType.RENAME,
+        data: { oldPath, newPath },
+    }, undefined, signal);
+    /**
+     * Create a directory.
+     *
+     * @category File System
+     */
+    createDir = (path, { signal } = {}) => this.#send({
+        type: FFMessageType.CREATE_DIR,
+        data: { path },
+    }, undefined, signal);
+    /**
+     * List directory contents.
+     *
+     * @category File System
+     */
+    listDir = (path, { signal } = {}) => this.#send({
+        type: FFMessageType.LIST_DIR,
+        data: { path },
+    }, undefined, signal);
+    /**
+     * Delete an empty directory.
+     *
+     * @category File System
+     */
+    deleteDir = (path, { signal } = {}) => this.#send({
+        type: FFMessageType.DELETE_DIR,
+        data: { path },
+    }, undefined, signal);
+}

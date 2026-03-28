@@ -1,1 +1,161 @@
-import{CORE_URL,FFMessageType}from"./const.js";import{ERROR_UNKNOWN_MESSAGE_TYPE,ERROR_NOT_LOADED,ERROR_IMPORT_FAILURE}from"./errors.js";let ffmpeg;const load=async({coreURL:e,wasmURL:s,workerURL:t})=>{const a=!ffmpeg;try{e||(e=CORE_URL),importScripts(e)}catch{if(e&&e!==CORE_URL||(e=CORE_URL.replace("/umd/","/esm/")),self.createFFmpegCore=(await import(e)).default,!self.createFFmpegCore)throw ERROR_IMPORT_FAILURE}const r=e,f=s||e.replace(/.js$/g,".wasm"),p=t||e.replace(/.js$/g,".worker.js");return ffmpeg=await self.createFFmpegCore({mainScriptUrlOrBlob:`${r}#${btoa(JSON.stringify({wasmURL:f,workerURL:p}))}`}),ffmpeg.setLogger(e=>self.postMessage({type:FFMessageType.LOG,data:e})),ffmpeg.setProgress(e=>self.postMessage({type:FFMessageType.PROGRESS,data:e})),a},exec=({args:e,timeout:s=-1})=>{ffmpeg.setTimeout(s),ffmpeg.exec(...e);const t=ffmpeg.ret;return ffmpeg.reset(),t},ffprobe=({args:e,timeout:s=-1})=>{ffmpeg.setTimeout(s),ffmpeg.ffprobe(...e);const t=ffmpeg.ret;return ffmpeg.reset(),t},writeFile=({path:e,data:s})=>(ffmpeg.FS.writeFile(e,s),!0),readFile=({path:e,encoding:s})=>ffmpeg.FS.readFile(e,{encoding:s}),deleteFile=({path:e})=>(ffmpeg.FS.unlink(e),!0),rename=({oldPath:e,newPath:s})=>(ffmpeg.FS.rename(e,s),!0),createDir=({path:e})=>(ffmpeg.FS.mkdir(e),!0),listDir=({path:e})=>{const s=ffmpeg.FS.readdir(e),t=[];for(const a of s){const s=ffmpeg.FS.stat(`${e}/${a}`),r=ffmpeg.FS.isDir(s.mode);t.push({name:a,isDir:r})}return t},deleteDir=({path:e})=>(ffmpeg.FS.rmdir(e),!0),mount=({fsType:e,options:s,mountPoint:t})=>{const a=e,r=ffmpeg.FS.filesystems[a];return!!r&&(ffmpeg.FS.mount(r,s,t),!0)},unmount=({mountPoint:e})=>(ffmpeg.FS.unmount(e),!0);self.onmessage=async({data:{id:e,type:s,data:t}})=>{const a=[];let r;try{if(s!==FFMessageType.LOAD&&!ffmpeg)throw ERROR_NOT_LOADED;switch(s){case FFMessageType.LOAD:r=await load(t);break;case FFMessageType.EXEC:r=exec(t);break;case FFMessageType.FFPROBE:r=ffprobe(t);break;case FFMessageType.WRITE_FILE:r=writeFile(t);break;case FFMessageType.READ_FILE:r=readFile(t);break;case FFMessageType.DELETE_FILE:r=deleteFile(t);break;case FFMessageType.RENAME:r=rename(t);break;case FFMessageType.CREATE_DIR:r=createDir(t);break;case FFMessageType.LIST_DIR:r=listDir(t);break;case FFMessageType.DELETE_DIR:r=deleteDir(t);break;case FFMessageType.MOUNT:r=mount(t);break;case FFMessageType.UNMOUNT:r=unmount(t);break;default:throw ERROR_UNKNOWN_MESSAGE_TYPE}}catch(s){return void self.postMessage({id:e,type:FFMessageType.ERROR,data:s.toString()})}r instanceof Uint8Array&&a.push(r.buffer),self.postMessage({id:e,type:s,data:r},a)};
+/// <reference no-default-lib="true" />
+/// <reference lib="esnext" />
+/// <reference lib="webworker" />
+import { CORE_URL, FFMessageType } from "./const.js";
+import { ERROR_UNKNOWN_MESSAGE_TYPE, ERROR_NOT_LOADED, ERROR_IMPORT_FAILURE, } from "./errors.js";
+let ffmpeg;
+const load = async ({ coreURL: _coreURL, wasmURL: _wasmURL, workerURL: _workerURL, }) => {
+    const first = !ffmpeg;
+    try {
+        if (!_coreURL)
+            _coreURL = CORE_URL;
+        // when web worker type is `classic`.
+        importScripts(_coreURL);
+    }
+    catch {
+        if (!_coreURL || _coreURL === CORE_URL)
+            _coreURL = CORE_URL.replace('/umd/', '/esm/');
+        // when web worker type is `module`.
+        self.createFFmpegCore = (await import(
+        /* @vite-ignore */ _coreURL)).default;
+        if (!self.createFFmpegCore) {
+            throw ERROR_IMPORT_FAILURE;
+        }
+    }
+    const coreURL = _coreURL;
+    const wasmURL = _wasmURL ? _wasmURL : _coreURL.replace(/.js$/g, ".wasm");
+    const workerURL = _workerURL
+        ? _workerURL
+        : _coreURL.replace(/.js$/g, ".worker.js");
+    ffmpeg = await self.createFFmpegCore({
+        // Fix `Overload resolution failed.` when using multi-threaded ffmpeg-core.
+        // Encoded wasmURL and workerURL in the URL as a hack to fix locateFile issue.
+        mainScriptUrlOrBlob: `${coreURL}#${btoa(JSON.stringify({ wasmURL, workerURL }))}`,
+    });
+    ffmpeg.setLogger((data) => self.postMessage({ type: FFMessageType.LOG, data }));
+    ffmpeg.setProgress((data) => self.postMessage({
+        type: FFMessageType.PROGRESS,
+        data,
+    }));
+    return first;
+};
+const exec = ({ args, timeout = -1 }) => {
+    ffmpeg.setTimeout(timeout);
+    ffmpeg.exec(...args);
+    const ret = ffmpeg.ret;
+    ffmpeg.reset();
+    return ret;
+};
+const ffprobe = ({ args, timeout = -1 }) => {
+    ffmpeg.setTimeout(timeout);
+    ffmpeg.ffprobe(...args);
+    const ret = ffmpeg.ret;
+    ffmpeg.reset();
+    return ret;
+};
+const writeFile = ({ path, data }) => {
+    ffmpeg.FS.writeFile(path, data);
+    return true;
+};
+const readFile = ({ path, encoding }) => ffmpeg.FS.readFile(path, { encoding });
+// TODO: check if deletion works.
+const deleteFile = ({ path }) => {
+    ffmpeg.FS.unlink(path);
+    return true;
+};
+const rename = ({ oldPath, newPath }) => {
+    ffmpeg.FS.rename(oldPath, newPath);
+    return true;
+};
+// TODO: check if creation works.
+const createDir = ({ path }) => {
+    ffmpeg.FS.mkdir(path);
+    return true;
+};
+const listDir = ({ path }) => {
+    const names = ffmpeg.FS.readdir(path);
+    const nodes = [];
+    for (const name of names) {
+        const stat = ffmpeg.FS.stat(`${path}/${name}`);
+        const isDir = ffmpeg.FS.isDir(stat.mode);
+        nodes.push({ name, isDir });
+    }
+    return nodes;
+};
+// TODO: check if deletion works.
+const deleteDir = ({ path }) => {
+    ffmpeg.FS.rmdir(path);
+    return true;
+};
+const mount = ({ fsType, options, mountPoint }) => {
+    const str = fsType;
+    const fs = ffmpeg.FS.filesystems[str];
+    if (!fs)
+        return false;
+    ffmpeg.FS.mount(fs, options, mountPoint);
+    return true;
+};
+const unmount = ({ mountPoint }) => {
+    ffmpeg.FS.unmount(mountPoint);
+    return true;
+};
+self.onmessage = async ({ data: { id, type, data: _data }, }) => {
+    const trans = [];
+    let data;
+    try {
+        if (type !== FFMessageType.LOAD && !ffmpeg)
+            throw ERROR_NOT_LOADED; // eslint-disable-line
+        switch (type) {
+            case FFMessageType.LOAD:
+                data = await load(_data);
+                break;
+            case FFMessageType.EXEC:
+                data = exec(_data);
+                break;
+            case FFMessageType.FFPROBE:
+                data = ffprobe(_data);
+                break;
+            case FFMessageType.WRITE_FILE:
+                data = writeFile(_data);
+                break;
+            case FFMessageType.READ_FILE:
+                data = readFile(_data);
+                break;
+            case FFMessageType.DELETE_FILE:
+                data = deleteFile(_data);
+                break;
+            case FFMessageType.RENAME:
+                data = rename(_data);
+                break;
+            case FFMessageType.CREATE_DIR:
+                data = createDir(_data);
+                break;
+            case FFMessageType.LIST_DIR:
+                data = listDir(_data);
+                break;
+            case FFMessageType.DELETE_DIR:
+                data = deleteDir(_data);
+                break;
+            case FFMessageType.MOUNT:
+                data = mount(_data);
+                break;
+            case FFMessageType.UNMOUNT:
+                data = unmount(_data);
+                break;
+            default:
+                throw ERROR_UNKNOWN_MESSAGE_TYPE;
+        }
+    }
+    catch (e) {
+        self.postMessage({
+            id,
+            type: FFMessageType.ERROR,
+            data: e.toString(),
+        });
+        return;
+    }
+    if (data instanceof Uint8Array) {
+        trans.push(data.buffer);
+    }
+    self.postMessage({ id, type, data }, trans);
+};

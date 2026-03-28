@@ -1,1 +1,9 @@
-export var FFFSType;!function(F){F.MEMFS="MEMFS",F.NODEFS="NODEFS",F.NODERAWFS="NODERAWFS",F.IDBFS="IDBFS",F.WORKERFS="WORKERFS",F.PROXYFS="PROXYFS"}(FFFSType||(FFFSType={}));
+export var FFFSType;
+(function (FFFSType) {
+    FFFSType["MEMFS"] = "MEMFS";
+    FFFSType["NODEFS"] = "NODEFS";
+    FFFSType["NODERAWFS"] = "NODERAWFS";
+    FFFSType["IDBFS"] = "IDBFS";
+    FFFSType["WORKERFS"] = "WORKERFS";
+    FFFSType["PROXYFS"] = "PROXYFS";
+})(FFFSType || (FFFSType = {}));

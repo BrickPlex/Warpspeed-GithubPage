@@ -1,1 +1,23 @@
-export const MIME_TYPE_JAVASCRIPT="text/javascript";export const MIME_TYPE_WASM="application/wasm";export const CORE_VERSION="0.12.9";export const CORE_URL="https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd/ffmpeg-core.js";export var FFMessageType;!function(E){E.LOAD="LOAD",E.EXEC="EXEC",E.FFPROBE="FFPROBE",E.WRITE_FILE="WRITE_FILE",E.READ_FILE="READ_FILE",E.DELETE_FILE="DELETE_FILE",E.RENAME="RENAME",E.CREATE_DIR="CREATE_DIR",E.LIST_DIR="LIST_DIR",E.DELETE_DIR="DELETE_DIR",E.ERROR="ERROR",E.DOWNLOAD="DOWNLOAD",E.PROGRESS="PROGRESS",E.LOG="LOG",E.MOUNT="MOUNT",E.UNMOUNT="UNMOUNT"}(FFMessageType||(FFMessageType={}));
+export const MIME_TYPE_JAVASCRIPT = "text/javascript";
+export const MIME_TYPE_WASM = "application/wasm";
+export const CORE_VERSION = "0.12.9";
+export const CORE_URL = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd/ffmpeg-core.js`;
+export var FFMessageType;
+(function (FFMessageType) {
+    FFMessageType["LOAD"] = "LOAD";
+    FFMessageType["EXEC"] = "EXEC";
+    FFMessageType["FFPROBE"] = "FFPROBE";
+    FFMessageType["WRITE_FILE"] = "WRITE_FILE";
+    FFMessageType["READ_FILE"] = "READ_FILE";
+    FFMessageType["DELETE_FILE"] = "DELETE_FILE";
+    FFMessageType["RENAME"] = "RENAME";
+    FFMessageType["CREATE_DIR"] = "CREATE_DIR";
+    FFMessageType["LIST_DIR"] = "LIST_DIR";
+    FFMessageType["DELETE_DIR"] = "DELETE_DIR";
+    FFMessageType["ERROR"] = "ERROR";
+    FFMessageType["DOWNLOAD"] = "DOWNLOAD";
+    FFMessageType["PROGRESS"] = "PROGRESS";
+    FFMessageType["LOG"] = "LOG";
+    FFMessageType["MOUNT"] = "MOUNT";
+    FFMessageType["UNMOUNT"] = "UNMOUNT";
+})(FFMessageType || (FFMessageType = {}));

@@ -1,1 +1,7 @@
-export const getMessageID=(()=>{let e=0;return()=>e++})();
+/**
+ * Generate an unique message ID.
+ */
+export const getMessageID = (() => {
+    let messageID = 0;
+    return () => messageID++;
+})();
