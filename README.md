@@ -34,12 +34,12 @@ Being able to change the anchor points on groups/objects in vector
 
 "How can I install WarpSpeed?"
 
-You can download the destop version here!
+You can download the destop version here!:
 https://sites.google.com/view/warpspeed0/home
 
 "How can I use WarpSpeed online?
 
-You can use any of these links!
+You can use any of these links!:
 https://warpspeed0.github.io/WarpSpeed/
 
 https://file.garden/Zya8-gItADlYXzdp/warpspeed/index.html
