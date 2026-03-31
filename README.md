@@ -37,7 +37,7 @@ Being able to change the anchor points on groups/objects in vector
 You can download the destop version here!:
 https://sites.google.com/view/warpspeed0/home
 
-"How can I use WarpSpeed online?
+"How can I use WarpSpeed online?"
 
 You can use any of these links!:
 https://warpspeed0.github.io/WarpSpeed/
